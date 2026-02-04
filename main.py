@@ -7,6 +7,7 @@ import akshare as ak
 import warnings
 import requests
 import time
+import os
 import urllib3
 import pytz  # 用于中国时区
 from datetime import datetime
@@ -222,3 +223,4 @@ Markdown 格式输出。"""),
 
 if __name__ == "__main__":
     main()
+
