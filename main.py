@@ -8,7 +8,8 @@ import warnings
 import requests
 import time
 import urllib3
-import threading  # 用于后台线程自动刷新
+import pytz  # 用于中国时区
+from datetime import datetime
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)
@@ -21,7 +22,7 @@ st.set_page_config(
     layout="wide"
 )
 
-API_KEY = "c1d335504bbc4c4d9f4eb781b24a52a6.IPF1Joa2fcAnaN5Z"  # ← 替换成你的真实 Key
+API_KEY = os.getenv("ZHIPU_API_KEY")  # 从环境变量读取（Streamlit Cloud Secrets）
 
 REFRESH_INTERVAL = 120  # 2分钟 = 120秒
 
@@ -35,8 +36,13 @@ def get_news():
         df = df.head(50)
         return df
     except Exception as e:
-        st.error(f"抓取同花顺新闻失败: {str(e)}\n（可能网络/SSL问题，试 VPN 中国节点或手动输入测试。）")
+        st.error(f"抓取同花顺新闻失败: {str(e)}\n（可能网络/SSL问题，试手动输入测试。）")
         return pd.DataFrame(columns=['标题', '内容', '发布时间', '链接'])
+
+def get_china_time():
+    """获取当前中国时间字符串"""
+    china_tz = pytz.timezone('Asia/Shanghai')
+    return datetime.now(china_tz).strftime("%Y-%m-%d %H:%M:%S")
 
 def main():
     st.title("AI 新闻概念 & 个股挖掘工具（同花顺版）")
@@ -48,14 +54,14 @@ def main():
     if 'last_refresh' not in st.session_state:
         st.session_state.last_refresh = time.time()
     if 'last_refresh_str' not in st.session_state:
-        st.session_state.last_refresh_str = time.strftime("%Y-%m-%d %H:%M:%S")
+        st.session_state.last_refresh_str = get_china_time()
 
-    # 自动刷新检查（主线程每打开页面检查一次）
+    # 自动刷新检查
     current_time = time.time()
     if current_time - st.session_state.last_refresh > REFRESH_INTERVAL:
         st.session_state.news_df = get_news()
         st.session_state.last_refresh = current_time
-        st.session_state.last_refresh_str = time.strftime("%Y-%m-%d %H:%M:%S")
+        st.session_state.last_refresh_str = get_china_time()
         st.rerun()
 
     col_list, col_detail = st.columns([3, 7])
@@ -79,13 +85,25 @@ def main():
         if st.button("手动刷新新闻列表"):
             st.session_state.news_df = get_news()
             st.session_state.last_refresh = time.time()
-            st.session_state.last_refresh_str = time.strftime("%Y-%m-%d %H:%M:%S")
+            st.session_state.last_refresh_str = get_china_time()
             st.rerun()
 
         if not filtered_df.empty:
             for idx, row in filtered_df.iterrows():
                 title = row.get('标题', '无标题')
-                time_str = row.get('发布时间', '未知时间')
+                # 新闻发布时间转中国时间（假设原始是 UTC 或无时区）
+                pub_time_str = row.get('发布时间', '未知时间')
+                if pub_time_str != '未知时间':
+                    try:
+                        # 如果原始时间字符串有格式问题，可调整 strptime 格式
+                        pub_time = datetime.strptime(pub_time_str, "%Y-%m-%d %H:%M:%S")
+                        china_tz = pytz.timezone('Asia/Shanghai')
+                        pub_time_china = pub_time.replace(tzinfo=pytz.UTC).astimezone(china_tz) if 'UTC' in pub_time_str else pub_time.replace(tzinfo=china_tz)
+                        time_str = pub_time_china.strftime("%Y-%m-%d %H:%M:%S")
+                    except:
+                        time_str = pub_time_str  # 如果转换失败，原样显示
+                else:
+                    time_str = '未知时间'
                 btn_text = f"{title}\n{time_str}"
                 if st.button(btn_text, key=f"news_btn_{idx}", use_container_width=True):
                     st.session_state.selected_idx = idx
@@ -99,7 +117,18 @@ def main():
             if idx < len(st.session_state.news_df):
                 news = st.session_state.news_df.iloc[idx]
                 st.subheader(news.get('标题', '标题加载中'))
-                st.caption(f"发布时间：{news.get('发布时间', '未知')}")
+                # 发布时间转中国时间
+                pub_time_str = news.get('发布时间', '未知')
+                if pub_time_str != '未知':
+                    try:
+                        pub_time = datetime.strptime(pub_time_str, "%Y-%m-%d %H:%M:%S")
+                        china_tz = pytz.timezone('Asia/Shanghai')
+                        pub_time_china = pub_time.replace(tzinfo=pytz.UTC).astimezone(china_tz) if 'UTC' in pub_time_str else pub_time.replace(tzinfo=china_tz)
+                        st.caption(f"发布时间（中国时间）：{pub_time_china.strftime('%Y-%m-%d %H:%M:%S')}")
+                    except:
+                        st.caption(f"发布时间：{pub_time_str}")
+                else:
+                    st.caption("发布时间：未知")
                 st.info(news.get('内容', '内容暂不可见'))
                 if news.get('链接'):
                     st.markdown(f"[原文链接]({news.get('链接')})")
@@ -132,7 +161,7 @@ def main():
                         except Exception as e:
                             st.error(f"AI 分析失败：{str(e)}")
 
-                # 手动输入新闻测试（备用）
+        # 手动输入备用
         st.markdown("---")
         st.subheader("手动输入新闻测试（备用）")
         manual_title = st.text_input("新闻标题（可选）")
@@ -161,11 +190,11 @@ Markdown 格式输出。"""),
                 except Exception as e:
                     st.error(f"手动分析失败：{str(e)}")
 
-        # 自动刷新设置（只用 JS 方案，避免线程警告刷屏）
+        # 自动刷新设置（只用 JS 方案）
         st.markdown("---")
         st.subheader("自动刷新设置")
 
-        # 显示倒计时
+        # 显示倒计时（中国时间）
         if 'last_refresh' in st.session_state:
             elapsed = time.time() - st.session_state.last_refresh
             remaining = max(0, REFRESH_INTERVAL - elapsed)
@@ -173,25 +202,22 @@ Markdown 格式输出。"""),
             seconds = int(remaining % 60)
             st.caption(f"下次建议刷新剩余：{minutes}分 {seconds}秒（点击下方按钮开启自动）")
 
-        # 一键开启 JS 自动重载
         if st.button("开启自动页面刷新（每2分钟自动重载一次）"):
             st.success("已开启！浏览器将每2分钟自动刷新页面，保持新闻最新。")
-            # 注入 JS setInterval 自动 reload
             auto_js = f"""
             <script>
                 function autoReload() {{
-                    window.location.reload(true);  // 强制从服务器重载，避免缓存
+                    window.location.reload(true);
                 }}
                 setInterval(autoReload, {REFRESH_INTERVAL * 1000});
             </script>
             """
             st.components.v1.html(auto_js, height=0)
 
-        # 手动刷新按钮（始终可用）
         if st.button("立即手动刷新新闻列表"):
             st.session_state.news_df = get_news()
             st.session_state.last_refresh = time.time()
-            st.session_state.last_refresh_str = time.strftime("%Y-%m-%d %H:%M:%S")
+            st.session_state.last_refresh_str = get_china_time()
             st.rerun()
 
 if __name__ == "__main__":
