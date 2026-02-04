@@ -22,25 +22,26 @@ st.set_page_config(page_title="AI 财经新闻概念挖掘机", page_icon="📈"
 API_KEY = os.getenv("ZHIPU_API_KEY")
 
 REFRESH_INTERVAL = 120
-PAGE_SIZE = 50          # 每页 50 条（两列 × 25）
-ITEMS_PER_COLUMN = 25   # 每列 25 条
-MAX_TOTAL = 1500        # 最多缓存 1500 条（30页）
+PAGE_SIZE = 50
+ITEMS_PER_COLUMN = 25
+MAX_TOTAL = 1500
 
-# 强力压缩按钮样式：小字体、紧凑间距、低高度
+# 极致压缩按钮样式
 st.markdown("""
     <style>
-    .news-button {
-        font-size: 13px !important;
-        padding: 6px 10px !important;
-        line-height: 1.1 !important;
-        height: 60px !important;
+    .stButton > button {
+        font-size: 12px !important;
+        padding: 4px 8px !important;
+        line-height: 1.0 !important;
+        height: 50px !important;
+        margin-bottom: 2px !important;
         white-space: normal !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
-        margin-bottom: 4px !important;
+        display: block !important;
     }
-    .stButton > button {
-        width: 100% !important;
+    .stButton {
+        margin-bottom: 2px !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -52,7 +53,7 @@ def get_news():
         for col in required_cols:
             if col not in df.columns:
                 df[col] = '未知'
-        return df.head(200)  # 一次最多取 200 条新新闻
+        return df.head(200)
     except:
         return pd.DataFrame(columns=['标题', '内容', '发布时间', '链接'])
 
@@ -64,8 +65,7 @@ def convert_to_china_time(time_str):
         return time_str
     try:
         pub_time = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
-        china_tz = pytz.timezone('Asia/Shanghai')
-        return pub_time.replace(tzinfo=pytz.UTC).astimezone(china_tz).strftime("%Y-%m-%d %H:%M:%S")
+        return pub_time.replace(tzinfo=pytz.UTC).astimezone(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d %H:%M:%S")
     except:
         return time_str
 
@@ -80,14 +80,12 @@ def main():
     if 'last_refresh_str' not in st.session_state:
         st.session_state.last_refresh_str = get_china_time()
 
-    # 自动刷新：追加新新闻到最前面，旧的保留
+    # 自动刷新：追加新新闻，保留旧新闻
     current_time = time.time()
     if current_time - st.session_state.last_refresh > REFRESH_INTERVAL:
         new_df = get_news()
         if not new_df.empty:
-            # 合并，去重（标题+发布时间作为唯一键），新新闻优先
-            combined = pd.concat([new_df, st.session_state.news_df])
-            combined = combined.drop_duplicates(subset=['标题', '发布时间'], keep='first')
+            combined = pd.concat([new_df, st.session_state.news_df]).drop_duplicates(subset=['标题', '发布时间'], keep='first')
             combined = combined.sort_values(by='发布时间', ascending=False)
             st.session_state.news_df = combined.head(MAX_TOTAL)
         st.session_state.last_refresh = current_time
@@ -98,9 +96,9 @@ def main():
 
     with col_list:
         st.subheader("最新财经快讯")
-        st.caption(f"上次刷新: {st.session_state.last_refresh_str}（每2分钟自动更新）")
+        st.caption(f"上次刷新: {st.session_state.last_refresh_str}（每2分钟自动）")
 
-        search_keyword = st.text_input("搜索（支持全缓存搜索）", placeholder="输入关键词...")
+        search_keyword = st.text_input("搜索（全缓存搜索）", placeholder="输入关键词...")
         search_keyword = search_keyword.strip().lower()
 
         if search_keyword:
@@ -108,15 +106,14 @@ def main():
                 st.session_state.news_df['标题'].str.lower().str.contains(search_keyword, na=False) |
                 st.session_state.news_df['内容'].str.lower().str.contains(search_keyword, na=False)
             ]
-            st.info(f"找到 {len(filtered_df)} 条匹配（全缓存 {len(st.session_state.news_df)} 条）")
+            st.info(f"找到 {len(filtered_df)} 条（缓存 {len(st.session_state.news_df)} 条）")
         else:
             filtered_df = st.session_state.news_df
 
         if st.button("手动刷新"):
             new_df = get_news()
             if not new_df.empty:
-                combined = pd.concat([new_df, st.session_state.news_df])
-                combined = combined.drop_duplicates(subset=['标题', '发布时间'], keep='first')
+                combined = pd.concat([new_df, st.session_state.news_df]).drop_duplicates(subset=['标题', '发布时间'], keep='first')
                 combined = combined.sort_values(by='发布时间', ascending=False)
                 st.session_state.news_df = combined.head(MAX_TOTAL)
             st.session_state.last_refresh = time.time()
@@ -136,15 +133,14 @@ def main():
         # 两列，每列 25 条
         col1, col2 = st.columns(2)
 
-        # 分成左右两列数据
         col1_data = page_df.iloc[0:ITEMS_PER_COLUMN]
-        col2_data = page_df.iloc[ITEMS_PER_COLUMN:]
+        col2_data = page_df.iloc[ITEMS_PER_COLUMN:PAGE_SIZE]
 
         with col1:
             for _, row in col1_data.iterrows():
                 title = row['标题']
                 tstr = convert_to_china_time(row['发布时间'])
-                if st.button(f"{title}  {tstr}", key=f"btn1_{title}_{tstr}", help="点击查看详情", use_container_width=True):
+                if st.button(f"{title}  {tstr}", key=f"left_{title}_{tstr}", use_container_width=True):
                     st.session_state.selected_news = row.to_dict()
                     st.rerun()
 
@@ -152,11 +148,11 @@ def main():
             for _, row in col2_data.iterrows():
                 title = row['标题']
                 tstr = convert_to_china_time(row['发布时间'])
-                if st.button(f"{title}  {tstr}", key=f"btn2_{title}_{tstr}", help="点击查看详情", use_container_width=True):
+                if st.button(f"{title}  {tstr}", key=f"right_{title}_{tstr}", use_container_width=True):
                     st.session_state.selected_news = row.to_dict()
                     st.rerun()
 
-        # 分页控件
+        # 分页控件（移到外面，确保可见）
         st.markdown("---")
         c1, c2, c3 = st.columns([1, 2, 1])
         with c1:
@@ -164,7 +160,7 @@ def main():
                 st.session_state.current_page -= 1
                 st.rerun()
         with c2:
-            st.caption(f"第 {page} / {total_pages} 页   共 {total} 条（缓存上限 {MAX_TOTAL} 条）")
+            st.caption(f"第 {page} / {total_pages} 页   共 {total} 条（缓存上限 1500 条）")
         with c3:
             if st.button("下一页") and page < total_pages:
                 st.session_state.current_page += 1
@@ -197,7 +193,7 @@ def main():
         else:
             st.info("请从左侧选择一条新闻")
 
-        # 手动输入（保持原样）
+        # 手动输入
         st.markdown("---")
         st.subheader("手动输入测试")
         manual_title = st.text_input("标题（可选）")
