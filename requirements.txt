@@ -1,0 +1,8 @@
+streamlit
+pandas
+akshare
+langchain
+langchain-openai
+langchain-core
+requests
+urllib3
