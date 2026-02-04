@@ -96,13 +96,14 @@ def main():
                 pub_time_str = row.get('发布时间', '未知时间')
                 if pub_time_str != '未知时间':
                     try:
-                        # 如果原始时间字符串有格式问题，可调整 strptime 格式
+                        # 假设格式是 "%Y-%m-%d %H:%M:%S"，如果接口返回不同格式，可调整
                         pub_time = datetime.strptime(pub_time_str, "%Y-%m-%d %H:%M:%S")
                         china_tz = pytz.timezone('Asia/Shanghai')
+                        # 如果原始是 UTC，转时区；如果无时区，直接赋 Asia/Shanghai
                         pub_time_china = pub_time.replace(tzinfo=pytz.UTC).astimezone(china_tz) if 'UTC' in pub_time_str else pub_time.replace(tzinfo=china_tz)
                         time_str = pub_time_china.strftime("%Y-%m-%d %H:%M:%S")
-                    except:
-                        time_str = pub_time_str  # 如果转换失败，原样显示
+                    except ValueError：
+                        time_str = pub_time_str  # 格式错，原样显示
                 else:
                     time_str = '未知时间'
                 btn_text = f"{title}\n{time_str}"
@@ -126,7 +127,7 @@ def main():
                         china_tz = pytz.timezone('Asia/Shanghai')
                         pub_time_china = pub_time.replace(tzinfo=pytz.UTC).astimezone(china_tz) if 'UTC' in pub_time_str else pub_time.replace(tzinfo=china_tz)
                         st.caption(f"发布时间（中国时间）：{pub_time_china.strftime('%Y-%m-%d %H:%M:%S')}")
-                    except:
+                    except ValueError:
                         st.caption(f"发布时间：{pub_time_str}")
                 else:
                     st.caption("发布时间：未知")
@@ -223,4 +224,5 @@ Markdown 格式输出。"""),
 
 if __name__ == "__main__":
     main()
+
 
