@@ -7,10 +7,10 @@ import akshare as ak
 import warnings
 import requests
 import time
-import os
 import urllib3
-import pytz  # 用于中国时区
+import pytz
 from datetime import datetime
+import os  # 用于读取环境变量 API Key
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)
@@ -23,9 +23,9 @@ st.set_page_config(
     layout="wide"
 )
 
-API_KEY = os.getenv("ZHIPU_API_KEY")  # 从环境变量读取（Streamlit Cloud Secrets）
+API_KEY = os.getenv("ZHIPU_API_KEY")  # 从 Streamlit Cloud Secrets 读取
 
-REFRESH_INTERVAL = 120  # 2分钟 = 120秒
+REFRESH_INTERVAL = 120  # 2分钟
 
 def get_news():
     try:
@@ -37,19 +37,31 @@ def get_news():
         df = df.head(50)
         return df
     except Exception as e:
-        st.error(f"抓取同花顺新闻失败: {str(e)}\n（可能网络/SSL问题，试手动输入测试。）")
+        st.error(f"抓取失败: {str(e)}")
         return pd.DataFrame(columns=['标题', '内容', '发布时间', '链接'])
 
 def get_china_time():
-    """获取当前中国时间字符串"""
     china_tz = pytz.timezone('Asia/Shanghai')
     return datetime.now(china_tz).strftime("%Y-%m-%d %H:%M:%S")
+
+def convert_to_china_time(time_str):
+    if time_str == '未知' or time_str == '未知时间':
+        return time_str
+    try:
+        # 假设接口返回格式为 "YYYY-MM-DD HH:MM:SS"
+        pub_time = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
+        china_tz = pytz.timezone('Asia/Shanghai')
+        # 如果原始是 UTC，转时区；否则直接赋中国时区
+        pub_time_china = pub_time.replace(tzinfo=pytz.UTC).astimezone(china_tz)
+        return pub_time_china.strftime("%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        # 格式不匹配，原样返回
+        return time_str
 
 def main():
     st.title("AI 新闻概念 & 个股挖掘工具（同花顺版）")
     st.caption("点击左侧新闻标题 → 右侧显示详情 → 点击分析按钮获取 AI 解读")
 
-    # 初始化 session_state
     if 'news_df' not in st.session_state:
         st.session_state.news_df = get_news()
     if 'last_refresh' not in st.session_state:
@@ -57,7 +69,6 @@ def main():
     if 'last_refresh_str' not in st.session_state:
         st.session_state.last_refresh_str = get_china_time()
 
-    # 自动刷新检查
     current_time = time.time()
     if current_time - st.session_state.last_refresh > REFRESH_INTERVAL:
         st.session_state.news_df = get_news()
@@ -71,7 +82,7 @@ def main():
         st.subheader("最新财经快讯（同花顺）")
         st.caption(f"上次刷新: {st.session_state.last_refresh_str}（自动每2分钟检查一次）")
 
-        search_keyword = st.text_input("搜索新闻（关键词）", placeholder="输入标题或内容关键词...", key="search")
+        search_keyword = st.text_input("搜索新闻（关键词）", placeholder="输入标题或内容关键词...")
         search_keyword = search_keyword.strip().lower()
 
         if search_keyword:
@@ -92,20 +103,7 @@ def main():
         if not filtered_df.empty:
             for idx, row in filtered_df.iterrows():
                 title = row.get('标题', '无标题')
-                # 新闻发布时间转中国时间（假设原始是 UTC 或无时区）
-                pub_time_str = row.get('发布时间', '未知时间')
-                if pub_time_str != '未知时间':
-                    try:
-                        # 假设格式是 "%Y-%m-%d %H:%M:%S"，如果接口返回不同格式，可调整
-                        pub_time = datetime.strptime(pub_time_str, "%Y-%m-%d %H:%M:%S")
-                        china_tz = pytz.timezone('Asia/Shanghai')
-                        # 如果原始是 UTC，转时区；如果无时区，直接赋 Asia/Shanghai
-                        pub_time_china = pub_time.replace(tzinfo=pytz.UTC).astimezone(china_tz) if 'UTC' in pub_time_str else pub_time.replace(tzinfo=china_tz)
-                        time_str = pub_time_china.strftime("%Y-%m-%d %H:%M:%S")
-                    except ValueError：
-                        time_str = pub_time_str  # 格式错，原样显示
-                else:
-                    time_str = '未知时间'
+                time_str = convert_to_china_time(row.get('发布时间', '未知时间'))
                 btn_text = f"{title}\n{time_str}"
                 if st.button(btn_text, key=f"news_btn_{idx}", use_container_width=True):
                     st.session_state.selected_idx = idx
@@ -119,18 +117,9 @@ def main():
             if idx < len(st.session_state.news_df):
                 news = st.session_state.news_df.iloc[idx]
                 st.subheader(news.get('标题', '标题加载中'))
-                # 发布时间转中国时间
                 pub_time_str = news.get('发布时间', '未知')
-                if pub_time_str != '未知':
-                    try:
-                        pub_time = datetime.strptime(pub_time_str, "%Y-%m-%d %H:%M:%S")
-                        china_tz = pytz.timezone('Asia/Shanghai')
-                        pub_time_china = pub_time.replace(tzinfo=pytz.UTC).astimezone(china_tz) if 'UTC' in pub_time_str else pub_time.replace(tzinfo=china_tz)
-                        st.caption(f"发布时间（中国时间）：{pub_time_china.strftime('%Y-%m-%d %H:%M:%S')}")
-                    except ValueError:
-                        st.caption(f"发布时间：{pub_time_str}")
-                else:
-                    st.caption("发布时间：未知")
+                china_pub_time = convert_to_china_time(pub_time_str)
+                st.caption(f"发布时间（中国时间）：{china_pub_time}")
                 st.info(news.get('内容', '内容暂不可见'))
                 if news.get('链接'):
                     st.markdown(f"[原文链接]({news.get('链接')})")
@@ -163,7 +152,6 @@ def main():
                         except Exception as e:
                             st.error(f"AI 分析失败：{str(e)}")
 
-        # 手动输入备用
         st.markdown("---")
         st.subheader("手动输入新闻测试（备用）")
         manual_title = st.text_input("新闻标题（可选）")
@@ -192,11 +180,10 @@ Markdown 格式输出。"""),
                 except Exception as e:
                     st.error(f"手动分析失败：{str(e)}")
 
-        # 自动刷新设置（只用 JS 方案）
+        # 自动刷新设置（JS 方案）
         st.markdown("---")
         st.subheader("自动刷新设置")
 
-        # 显示倒计时（中国时间）
         if 'last_refresh' in st.session_state:
             elapsed = time.time() - st.session_state.last_refresh
             remaining = max(0, REFRESH_INTERVAL - elapsed)
@@ -224,5 +211,3 @@ Markdown 格式输出。"""),
 
 if __name__ == "__main__":
     main()
-
-
