@@ -107,7 +107,6 @@ def main():
         st.session_state.prev_search = ""                    # 上一次搜索关键词
 
     # ========== 自动刷新逻辑（原生autorefresh，无页面闪烁） ==========
-    st.autorefresh(interval=REFRESH_INTERVAL * 1000, key="auto-refresh")
     current_time = time.time()
     if current_time - st.session_state.last_refresh > REFRESH_INTERVAL:
         new_df = get_news()
@@ -291,3 +290,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
