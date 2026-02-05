@@ -5,7 +5,6 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 import akshare as ak
 import warnings
-import requests
 import time
 import urllib3
 import pytz
@@ -26,26 +25,21 @@ PAGE_SIZE = 50
 ITEMS_PER_COLUMN = 25
 MAX_TOTAL = 1500
 
-# 极致压缩按钮 + 两列布局 CSS
 st.markdown("""
     <style>
     .stButton > button {
-        font-size: 12px !important;
-        padding: 4px 8px !important;
-        line-height: 1.0 !important;
-        min-height: 45px !important;
-        margin: 1px 0 !important;
+        font-size: 13px !important;
+        padding: 6px 10px !important;
+        line-height: 1.1 !important;
+        min-height: 55px !important;
+        margin-bottom: 3px !important;
         white-space: normal !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
-        display: block !important;
         width: 100% !important;
     }
-    div.row-widget.stButton {
-        margin-bottom: 2px !important;
-    }
     .stColumns > div {
-        padding: 0 4px !important;
+        padding: 0 5px !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -63,14 +57,16 @@ def get_news():
         return pd.DataFrame(columns=['标题', '内容', '发布时间', '链接'])
 
 def get_china_time():
-    return datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d %H:%M:%S")
+    china_tz = pytz.timezone('Asia/Shanghai')
+    return datetime.now(china_tz).strftime("%Y-%m-%d %H:%M:%S")
 
 def convert_to_china_time(time_str):
-    if not time_str or time_str in ['未知', '未知时间']:
+    if time_str in ['未知', '未知时间', None]:
         return time_str
     try:
         pub_time = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
-        return pub_time.replace(tzinfo=pytz.UTC).astimezone(pytz.timezone('Asia/Shanghai')).strftime("%Y-%m-%d %H:%M:%S")
+        china_tz = pytz.timezone('Asia/Shanghai')
+        return pub_time.replace(tzinfo=pytz.UTC).astimezone(china_tz).strftime("%Y-%m-%d %H:%M:%S")
     except:
         return time_str
 
@@ -89,7 +85,8 @@ def main():
     if current_time - st.session_state.last_refresh > REFRESH_INTERVAL:
         new_df = get_news()
         if not new_df.empty:
-            combined = pd.concat([new_df, st.session_state.news_df]).drop_duplicates(subset=['标题', '发布时间'], keep='first')
+            combined = pd.concat([new_df, st.session_state.news_df])
+            combined = combined.drop_duplicates(subset=['标题', '发布时间'], keep='first')
             combined = combined.sort_values(by='发布时间', ascending=False)
             st.session_state.news_df = combined.head(MAX_TOTAL)
         st.session_state.last_refresh = current_time
@@ -102,10 +99,9 @@ def main():
         st.subheader("最新财经快讯")
         st.caption(f"上次刷新: {st.session_state.last_refresh_str}（每2分钟自动）")
 
-        search_keyword = st.text_input("搜索（全缓存）", placeholder="输入关键词...")
+        search_keyword = st.text_input("搜索（支持全缓存搜索）", "")
         search_keyword = search_keyword.strip().lower()
 
-        # 搜索时自动回第1页
         if search_keyword and ('prev_search' not in st.session_state or st.session_state.prev_search != search_keyword):
             st.session_state.current_page = 1
             st.session_state.prev_search = search_keyword
@@ -119,10 +115,11 @@ def main():
         else:
             filtered_df = st.session_state.news_df
 
-        if st.button("手动刷新"):
+        if st.button("手动刷新新闻列表"):
             new_df = get_news()
             if not new_df.empty:
-                combined = pd.concat([new_df, st.session_state.news_df]).drop_duplicates(subset=['标题', '发布时间'], keep='first')
+                combined = pd.concat([new_df, st.session_state.news_df])
+                combined = combined.drop_duplicates(subset=['标题', '发布时间'], keep='first')
                 combined = combined.sort_values(by='发布时间', ascending=False)
                 st.session_state.news_df = combined.head(MAX_TOTAL)
             st.session_state.last_refresh = time.time()
@@ -147,7 +144,7 @@ def main():
             for _, row in col1_data.iterrows():
                 title = row['标题']
                 tstr = convert_to_china_time(row['发布时间'])
-                btn_key = f"left_{title}_{tstr}"
+                btn_key = f"btn_left_{title}_{tstr}"
                 if st.button(f"{title}  {tstr}", key=btn_key, use_container_width=True):
                     st.session_state.selected_news = row.to_dict()
                     st.rerun()
@@ -156,7 +153,7 @@ def main():
             for _, row in col2_data.iterrows():
                 title = row['标题']
                 tstr = convert_to_china_time(row['发布时间'])
-                btn_key = f"right_{title}_{tstr}"
+                btn_key = f"btn_right_{title}_{tstr}"
                 if st.button(f"{title}  {tstr}", key=btn_key, use_container_width=True):
                     st.session_state.selected_news = row.to_dict()
                     st.rerun()
@@ -168,7 +165,7 @@ def main():
                 st.session_state.current_page -= 1
                 st.rerun()
         with c2:
-            st.caption(f"第 {page} / {total_pages} 页   共 {total} 条（缓存上限 1500）")
+            st.caption(f"第 {page} / {total_pages} 页   共 {total} 条（缓存上限 1500 条）")
         with c3:
             if st.button("下一页") and page < total_pages:
                 st.session_state.current_page += 1
@@ -184,7 +181,7 @@ def main():
             if news.get('链接'):
                 st.markdown(f"[原文链接]({news.get('链接')})")
 
-            if st.button("分析此新闻", type="primary"):
+            if st.button("用 GLM-4-Flash 分析", type="primary"):
                 with st.spinner("分析中..."):
                     try:
                         llm = ChatOpenAI(api_key=API_KEY, base_url="https://open.bigmodel.cn/api/paas/v4/", model="glm-4-flash", temperature=0.3)
