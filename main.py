@@ -8,6 +8,7 @@ import warnings
 import time
 import urllib3
 import pytz
+import requests
 from datetime import datetime
 import os
 import math
@@ -219,3 +220,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
