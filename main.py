@@ -106,20 +106,20 @@ def main():
     if 'prev_search' not in st.session_state:
         st.session_state.prev_search = ""                    # 上一次搜索关键词
 
-    # ========== 自动刷新逻辑（原生autorefresh，无页面闪烁） ==========
+        # ========== 自动刷新逻辑（原生autorefresh，无页面闪烁） ==========
     current_time = time.time()
     if current_time - st.session_state.last_refresh > REFRESH_INTERVAL:
-    new_df = get_news()
-    if not new_df.empty:
-        # 修复：强制累加新新闻，只去重完全相同的条目，保留更多数据
-        combined = pd.concat([new_df, st.session_state.news_df])
-        # 只对链接去重（标题/时间可能重复，链接唯一），保留更多新闻
-        combined = combined.drop_duplicates(subset=['链接'], keep='first')
-        # 按时间倒序，保留最多1500条
-        combined = combined.sort_values(by='发布时间', ascending=False)
-        st.session_state.news_df = combined.head(MAX_TOTAL)
-    st.session_state.last_refresh = current_time
-    st.session_state.last_refresh_str = get_china_time()
+        new_df = get_news()
+        if not new_df.empty:
+            # 修复：强制累加新闻，只去重完全相同的条目，保留更多数据
+            combined = pd.concat([new_df, st.session_state.news_df])
+            # 只对链接去重（标题/时间可能重复，链接唯一），保留更多新闻
+            combined = combined.drop_duplicates(subset=['链接'], keep='first')
+            # 按时间倒序，保留最多1500条
+            combined = combined.sort_values(by='发布时间', ascending=False)
+            st.session_state.news_df = combined.head(MAX_TOTAL)
+        st.session_state.last_refresh = current_time
+        st.session_state.last_refresh_str = get_china_time()
 
     # ========== 主布局：左侧新闻列表（7份）+ 右侧详情/分析（3份） ==========
     col_list, col_detail = st.columns([7, 3])
@@ -291,5 +291,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
