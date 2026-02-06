@@ -105,8 +105,10 @@ def main():
         st.session_state.current_page = 1                    # 当前页码
     if 'prev_search' not in st.session_state:
         st.session_state.prev_search = ""                    # 上一次搜索关键词
+    if 'selected_news' not in st.session_state:
+        st.session_state.selected_news = None                # 选中的新闻
 
-        # ========== 自动刷新逻辑（原生autorefresh，无页面闪烁） ==========
+    # ========== 自动刷新逻辑（原生autorefresh，无页面闪烁） ==========
     current_time = time.time()
     if current_time - st.session_state.last_refresh > REFRESH_INTERVAL:
         new_df = get_news()
@@ -114,7 +116,6 @@ def main():
             # 修复：强制累加新闻，只去重完全相同的条目，保留更多数据
             combined = pd.concat([new_df, st.session_state.news_df])
             # 只对链接去重（标题/时间可能重复，链接唯一），保留更多新闻
-            # 恢复去重，但按链接去重，保留更多新闻
             combined = combined.drop_duplicates(subset=['链接'], keep='first')
             # 按时间倒序，保留最多1500条
             combined = combined.sort_values(by='发布时间', ascending=False)
@@ -181,13 +182,13 @@ def main():
         with col1:
             st.markdown('<div class="col-item">', unsafe_allow_html=True)
             col1_data = page_df.iloc[0:ITEMS_PER_COLUMN]
-            for idx, row in filtered_df.iterrows():
+            for idx, row in col1_data.iterrows():
                 title = row['标题']
                 pub_time = convert_to_china_time(row['发布时间'])
-                # 按钮唯一key，避免重复报错
-                btn_key = f"news_btn_{current_page}_left_{_}"
+                link = row['链接']
                 # 用新闻的索引+链接生成唯一key，避免重复
-                if st.button(f"{title}\n{pub_time}", key=f"news_btn_{idx}_{link}", use_container_width=True):
+                btn_key = f"news_btn_{current_page}_left_{idx}_{link}"
+                if st.button(f"{title}\n{pub_time}", key=btn_key, use_container_width=True):
                     st.session_state.selected_news = row.to_dict()
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -195,10 +196,12 @@ def main():
         with col2:
             st.markdown('<div class="col-item">', unsafe_allow_html=True)
             col2_data = page_df.iloc[ITEMS_PER_COLUMN:PAGE_SIZE]
-            for _, row in col2_data.iterrows():
+            for idx2, row in col2_data.iterrows():
                 title = row['标题']
                 pub_time = convert_to_china_time(row['发布时间'])
-                btn_key = f"news_btn_{current_page}_right_{_}"
+                link = row['链接']
+                # 用新闻的索引+链接生成唯一key，避免重复
+                btn_key = f"news_btn_{current_page}_right_{idx2}_{link}"
                 if st.button(f"{title}\n{pub_time}", key=btn_key, use_container_width=True):
                     st.session_state.selected_news = row.to_dict()
             st.markdown('</div>', unsafe_allow_html=True)
@@ -219,7 +222,7 @@ def main():
     with col_detail:
         st.subheader("新闻详情 & AI 分析")
         # 显示选中的新闻详情
-        if 'selected_news' in st.session_state:
+        if st.session_state.selected_news:
             news = st.session_state.selected_news
             st.markdown(f"### {news.get('标题')}")
             st.caption(f"发布时间：{convert_to_china_time(news.get('发布时间', '未知'))}")
@@ -294,9 +297,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
