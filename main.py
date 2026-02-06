@@ -114,7 +114,8 @@ def main():
             # 修复：强制累加新闻，只去重完全相同的条目，保留更多数据
             combined = pd.concat([new_df, st.session_state.news_df])
             # 只对链接去重（标题/时间可能重复，链接唯一），保留更多新闻
-            combined = combined.drop_duplicates(subset=['链接'], keep='first')
+            # 临时注释去重，强制累加
+            #combined = combined.drop_duplicates(subset=['链接'], keep='first')
             # 按时间倒序，保留最多1500条
             combined = combined.sort_values(by='发布时间', ascending=False)
             st.session_state.news_df = combined.head(MAX_TOTAL)
@@ -154,7 +155,8 @@ def main():
             new_df = get_news()
             if not new_df.empty:
                 combined = pd.concat([new_df, st.session_state.news_df])
-                combined = combined.drop_duplicates(subset=['链接'], keep='first')
+                # 临时注释去重，强制累加
+                #combined = combined.drop_duplicates(subset=['链接'], keep='first')
                 combined = combined.sort_values(by='发布时间', ascending=False)
                 st.session_state.news_df = combined.head(MAX_TOTAL)
             st.session_state.last_refresh = time.time()
@@ -291,6 +293,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
