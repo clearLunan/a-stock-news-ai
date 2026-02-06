@@ -12,6 +12,8 @@ import requests
 from datetime import datetime
 import os
 import math
+from db import init_db, save_news, load_news
+init_db()
 
 # 忽略无关警告，避免页面显示干扰
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -113,13 +115,7 @@ def main():
     if current_time - st.session_state.last_refresh > REFRESH_INTERVAL:
         new_df = get_news()
         if not new_df.empty:
-            # 修复：强制累加新闻，只去重完全相同的条目，保留更多数据
-            combined = pd.concat([new_df, st.session_state.news_df])
-            # 只对链接去重（标题/时间可能重复，链接唯一），保留更多新闻
-            combined = combined.drop_duplicates(subset=['链接'], keep='first')
-            # 按时间倒序，保留最多1500条
-            combined = combined.sort_values(by='发布时间', ascending=False)
-            st.session_state.news_df = combined.head(MAX_TOTAL)
+            save_news(new_df)   # ⭐ 核心：存进数据库
         st.session_state.last_refresh = current_time
         st.session_state.last_refresh_str = get_china_time()
 
@@ -155,11 +151,7 @@ def main():
         if st.button("手动刷新新闻列表", use_container_width=True):
             new_df = get_news()
             if not new_df.empty:
-                combined = pd.concat([new_df, st.session_state.news_df])
-                # 恢复去重，但按链接去重，保留更多新闻
-                combined = combined.drop_duplicates(subset=['链接'], keep='first')
-                combined = combined.sort_values(by='发布时间', ascending=False)
-                st.session_state.news_df = combined.head(MAX_TOTAL)
+                save_news(new_df)   # ⭐ 存数据库
             st.session_state.last_refresh = time.time()
             st.session_state.last_refresh_str = get_china_time()
 
@@ -297,3 +289,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
