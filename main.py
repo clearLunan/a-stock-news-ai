@@ -114,8 +114,8 @@ def main():
             # 修复：强制累加新闻，只去重完全相同的条目，保留更多数据
             combined = pd.concat([new_df, st.session_state.news_df])
             # 只对链接去重（标题/时间可能重复，链接唯一），保留更多新闻
-            # 临时注释去重，强制累加
-            #combined = combined.drop_duplicates(subset=['链接'], keep='first')
+            # 恢复去重，但按链接去重，保留更多新闻
+            combined = combined.drop_duplicates(subset=['链接'], keep='first')
             # 按时间倒序，保留最多1500条
             combined = combined.sort_values(by='发布时间', ascending=False)
             st.session_state.news_df = combined.head(MAX_TOTAL)
@@ -155,8 +155,8 @@ def main():
             new_df = get_news()
             if not new_df.empty:
                 combined = pd.concat([new_df, st.session_state.news_df])
-                # 临时注释去重，强制累加
-                #combined = combined.drop_duplicates(subset=['链接'], keep='first')
+                # 恢复去重，但按链接去重，保留更多新闻
+                combined = combined.drop_duplicates(subset=['链接'], keep='first')
                 combined = combined.sort_values(by='发布时间', ascending=False)
                 st.session_state.news_df = combined.head(MAX_TOTAL)
             st.session_state.last_refresh = time.time()
@@ -186,7 +186,8 @@ def main():
                 pub_time = convert_to_china_time(row['发布时间'])
                 # 按钮唯一key，避免重复报错
                 btn_key = f"news_btn_{current_page}_left_{_}"
-                if st.button(f"{title}\n{pub_time}", key=btn_key, use_container_width=True):
+                # 用新闻的索引+链接生成唯一key，避免重复
+                if st.button(f"{title}\n{pub_time}", key=f"news_btn_{idx}_{link}", use_container_width=True):
                     st.session_state.selected_news = row.to_dict()
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -293,6 +294,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
