@@ -181,7 +181,7 @@ def main():
         with col1:
             st.markdown('<div class="col-item">', unsafe_allow_html=True)
             col1_data = page_df.iloc[0:ITEMS_PER_COLUMN]
-            for _, row in col1_data.iterrows():
+            for idx, row in filtered_df.iterrows():
                 title = row['标题']
                 pub_time = convert_to_china_time(row['发布时间'])
                 # 按钮唯一key，避免重复报错
@@ -294,6 +294,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
